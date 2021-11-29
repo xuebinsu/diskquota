@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/aomd.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
@@ -80,7 +81,7 @@ static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, Quota
 static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static bool generate_insert_table_size_sql(StringInfoData *buf, int extMajorVersion);
 static char *convert_oidlist_to_string(List *oidlist);
-static int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode);
+static int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage);
 
 int get_ext_major_version(void);
 List *get_rel_oid_list(void);
@@ -1196,56 +1197,34 @@ get_rel_oid_list(void)
 	return oidlist;
 }
 
-/*
- * calculate size of (all forks of) a relation in transaction
- * This function is following calculate_relation_size()
- */
-static int64
-calculate_relation_size_all_forks(RelFileNodeBackend *rnode)
+typedef struct
 {
-	int64		totalsize = 0;
-	ForkNumber	forkNum;
-	int64		size = 0;
-	char	   *relationpath;
-	char		pathname[MAXPGPATH];
-	unsigned int segcount = 0;
+	char *relation_path;
+	int64 size;
+} RelationFileStatCtx;
 
+static bool
+stat_relation_seg_file(int segno, void *ctx)
+{
+	RelationFileStatCtx *stat_ctx = (RelationFileStatCtx *)ctx;
+	char file_path[MAXPGPATH] = {0};
+	if (segno == 0)
+		snprintf(file_path, MAXPGPATH, "%s", stat_ctx->relation_path);
+	else
+		snprintf(file_path, MAXPGPATH, "%s.%u", stat_ctx->relation_path, segno);
 	PG_TRY();
 	{
-		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
+		struct stat fst;
+		if (stat(file_path, &fst) < 0)
 		{
-			relationpath = relpathbackend(rnode->node, rnode->backend, forkNum);
-			size = 0;
-
-			for (segcount = 0;; segcount++)
-			{
-				struct stat fst;
-
-				CHECK_FOR_INTERRUPTS();
-
-				if (segcount == 0)
-					snprintf(pathname, MAXPGPATH, "%s",
-							 relationpath);
-				else
-					snprintf(pathname, MAXPGPATH, "%s.%u",
-							 relationpath, segcount);
-
-				SIMPLE_FAULT_INJECTOR("diskquota_before_stat_relfilenode");
-				if (stat(pathname, &fst) < 0)
-				{
-					if (errno == ENOENT)
-						break;
-					else
-						/* TODO: Do we need this? */
-						ereport(ERROR,
-								(errcode_for_file_access(),
-								 errmsg("[diskquota] could not stat file %s: %m", pathname)));
-				}
-				size += fst.st_size;
-			}
-
-			totalsize += size;
+			if (errno != ENOENT)
+				/* TODO: Do we need this? */
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						errmsg("[diskquota] could not stat file %s: %m", file_path)));
+			return false;
 		}
+		stat_ctx->size += fst.st_size;
 	}
 	PG_CATCH();
 	{
@@ -1255,8 +1234,48 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode)
 		RESUME_INTERRUPTS();
 	}
 	PG_END_TRY();
+	return true;
+}
 
-	return totalsize;
+/*
+ * calculate size of (all forks of) a relation in transaction
+ * This function is following calculate_relation_size()
+ */
+static int64
+calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
+{
+	int64		totalsize = 0;
+	ForkNumber	forkNum;
+	unsigned int segno = 0;
+
+	if (relstorage == RELSTORAGE_HEAP)
+	{
+		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
+		{
+			RelationFileStatCtx ctx = {0};
+			ctx.relation_path = relpathbackend(rnode->node, rnode->backend, forkNum);
+			ctx.size = 0;
+			for (segno = 0; ; segno++)
+			{
+				if (!stat_relation_seg_file(segno, &ctx))
+					break;
+			}
+			totalsize += ctx.size;
+		}
+		return totalsize;
+	} 
+	else if (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS)
+	{
+		RelationFileStatCtx ctx = {0};
+		ctx.relation_path = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
+		ctx.size = 0;
+		ao_foreach_extent_file(stat_relation_seg_file, &ctx);
+		return ctx.size;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 Datum
@@ -1264,17 +1283,17 @@ relation_size_local(PG_FUNCTION_ARGS)
 {
 	Oid reltablespace = PG_GETARG_OID(0);
 	Oid relfilenode = PG_GETARG_OID(1);
-	int backend = PG_GETARG_BOOL(2) ? -2 : -1;
+	char relpersistence = PG_GETARG_CHAR(2);
+	char relstorage = PG_GETARG_CHAR(3);
 	RelFileNodeBackend rnode = {0};
 	int64 size = 0;
 
 	rnode.node.dbNode = MyDatabaseId;
 	rnode.node.relNode = relfilenode;
-	rnode.node.spcNode = OidIsValid(reltablespace) ?
-		reltablespace : MyDatabaseTableSpace;
-	rnode.backend = backend;
+	rnode.node.spcNode = OidIsValid(reltablespace) ? reltablespace : MyDatabaseTableSpace;
+	rnode.backend = relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
 
-	size = calculate_relation_size_all_forks(&rnode);
+	size = calculate_relation_size_all_forks(&rnode, relstorage);
 
 	PG_RETURN_INT64(size);
 }
