@@ -1204,7 +1204,7 @@ typedef struct
 } RelationFileStatCtx;
 
 static bool
-stat_relation_seg_file(int segno, void *ctx)
+relation_file_stat(int segno, void *ctx)
 {
 	RelationFileStatCtx *stat_ctx = (RelationFileStatCtx *)ctx;
 	char file_path[MAXPGPATH] = {0};
@@ -1257,7 +1257,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 			ctx.size = 0;
 			for (segno = 0; ; segno++)
 			{
-				if (!stat_relation_seg_file(segno, &ctx))
+				if (!relation_file_stat(segno, &ctx))
 					break;
 			}
 			totalsize += ctx.size;
@@ -1269,7 +1269,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 		RelationFileStatCtx ctx = {0};
 		ctx.relation_path = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
 		ctx.size = 0;
-		ao_foreach_extent_file(stat_relation_seg_file, &ctx);
+		ao_foreach_extent_file(relation_file_stat, &ctx);
 		return ctx.size;
 	}
 	else
