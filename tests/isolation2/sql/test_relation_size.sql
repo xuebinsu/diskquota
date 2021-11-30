@@ -8,14 +8,14 @@ CREATE TABLE t_dummy_rel(i int);
 -- Insert a small amount of data to 't_dummy_rel'.
 INSERT INTO t_dummy_rel SELECT generate_series(1, 100);
 -- Shows that the size of relfilenode is not zero.
-SELECT diskquota.relation_size('t_dummy_rel', false);
+SELECT diskquota.relation_size('t_dummy_rel');
 
 -- Inject 'suspension' to servers.
 SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p';
 
 -- Session 1 will hang before applying stat(2) to the physical file.
-1&: SELECT diskquota.relation_size('t_dummy_rel', false);
+1&: SELECT diskquota.relation_size('t_dummy_rel');
 -- Drop the table.
 DROP TABLE t_dummy_rel;
 -- Remove the injected 'suspension'.

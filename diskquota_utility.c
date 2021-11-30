@@ -1212,28 +1212,17 @@ relation_file_stat(int segno, void *ctx)
 		snprintf(file_path, MAXPGPATH, "%s", stat_ctx->relation_path);
 	else
 		snprintf(file_path, MAXPGPATH, "%s.%u", stat_ctx->relation_path, segno);
-	PG_TRY();
+	struct stat fst;
+	SIMPLE_FAULT_INJECTOR("diskquota_before_stat_relfilenode");
+	if (stat(file_path, &fst) < 0)
 	{
-		struct stat fst;
-		if (stat(file_path, &fst) < 0)
-		{
-			if (errno != ENOENT)
-				/* TODO: Do we need this? */
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						errmsg("[diskquota] could not stat file %s: %m", file_path)));
-			return false;
-		}
-		stat_ctx->size += fst.st_size;
+		if (errno != ENOENT)
+			ereport(WARNING,
+					(errcode_for_file_access(),
+					errmsg("[diskquota] could not stat file %s: %m", file_path)));
+		return false;
 	}
-	PG_CATCH();
-	{
-		/* TODO: Record the error message to pg_log */
-		HOLD_INTERRUPTS();
-		FlushErrorState();
-		RESUME_INTERRUPTS();
-	}
-	PG_END_TRY();
+	stat_ctx->size += fst.st_size;
 	return true;
 }
 

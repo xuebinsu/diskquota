@@ -10,7 +10,7 @@ CREATE
 INSERT INTO t_dummy_rel SELECT generate_series(1, 100);
 INSERT 100
 -- Shows that the size of relfilenode is not zero.
-SELECT diskquota.relation_size('t_dummy_rel', false);
+SELECT diskquota.relation_size('t_dummy_rel');
  relation_size 
 ---------------
  98304         
@@ -27,7 +27,7 @@ SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'suspend', 
 (4 rows)
 
 -- Session 1 will hang before applying stat(2) to the physical file.
-1&: SELECT diskquota.relation_size('t_dummy_rel', false);  <waiting ...>
+1&: SELECT diskquota.relation_size('t_dummy_rel');  <waiting ...>
 -- Drop the table.
 DROP TABLE t_dummy_rel;
 DROP
