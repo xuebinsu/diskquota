@@ -398,8 +398,7 @@ init_disk_quota_shmem(void)
 	 * resources in pgss_shmem_startup().
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
-	/* 4 locks for diskquota refer to init_lwlocks() for details */
-	RequestAddinLWLocks(4);
+	RequestAddinLWLocks(DiskQuotaLocksItemNumber);
 
 	/* Install startup hook to initialize our shared memory. */
 	prev_shmem_startup_hook = shmem_startup_hook;
