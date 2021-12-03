@@ -204,21 +204,8 @@ object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId,
 static void
 report_relation_cache_helper(Oid relid)
 {
-	bool found;
-	
 	/* We do not collect the active table in either master or mirror segments  */
 	if (IS_QUERY_DISPATCHER() || IsRoleMirror())
-	{
-		return;
-	}
-
-	/*
-	 * Do not collect active table info when the database is not under monitoring.
-	 * this operation is read-only and does not require absolutely exact.
-	 * read the cache with out shared lock.
-	 */
-	hash_search(monitoring_dbid_cache, &MyDatabaseId, HASH_FIND, &found);
-	if (!found)
 	{
 		return;
 	}
