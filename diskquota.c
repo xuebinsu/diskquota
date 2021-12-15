@@ -991,7 +991,7 @@ start_worker_by_dboid(Oid dbid)
 	{
 		workerentry->handle = handle;
 		workerentry->pid = pid;
-		workerentry->epoch = UINT32_MAX - 1;
+		workerentry->epoch = UINT32_MAX;
 	}
 
 	LWLockRelease(diskquota_locks.worker_map_lock);
