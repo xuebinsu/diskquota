@@ -202,3 +202,7 @@ $$ LANGUAGE SQL;
 CREATE OR REPLACE FUNCTION diskquota.show_worker_status() RETURNS text STRICT
 AS 'MODULE_PATHNAME', 'show_worker_status'
 LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION diskquota.show_worker_timestamp() RETURNS bigint STRICT
+AS 'MODULE_PATHNAME', 'show_worker_timestamp'
+LANGUAGE C;

@@ -226,7 +226,7 @@ define_guc_variables(void)
 							NULL,
 							&diskquota_naptime,
 							2,
-							1,
+							0,
 							INT_MAX,
 							PGC_SIGHUP,
 							0,
@@ -1001,6 +1001,7 @@ start_worker_by_dboid(Oid dbid)
 		workerentry->handle = handle;
 		workerentry->pid = pid;
 		workerentry->status = WORKER_STARTED;
+		workerentry->timestamp = 0;
 	}
 
 	elog(WARNING, "worker status enter %p %d", workerentry, workerentry->dbid);
@@ -1035,12 +1036,15 @@ worker_set_status(Oid database_oid, enum WorkerStatus status)
 	bool found = false;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
 		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
-
-	elog(WARNING, "worker_set_status %p %d", workerentry, database_oid);
 	
 	if (found)
 	{
 		workerentry->status = status;
+		if (status == WORKER_COMPLETED)
+		{
+			elog(WARNING, "worker_set_status timestamp %p %d", workerentry, database_oid);
+			++workerentry->timestamp;
+		}
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
 	return found;
@@ -1064,9 +1068,34 @@ worker_get_status(Oid database_oid)
 	return status;
 }
 
+unsigned int
+worker_get_timestamp(Oid database_oid)
+{
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+
+	bool found = false;
+	unsigned int timestamp = 0;
+	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
+		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
+	
+	if (found)
+	{
+		timestamp = workerentry->timestamp;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+	return timestamp;
+}
+
 PG_FUNCTION_INFO_V1(show_worker_status);
 Datum
 show_worker_status(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_TEXT_P(cstring_to_text(worker_status_text[worker_get_status(MyDatabaseId)]));
+}
+
+PG_FUNCTION_INFO_V1(show_worker_timestamp);
+Datum
+show_worker_timestamp(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_UINT32(worker_get_timestamp(MyDatabaseId));
 }

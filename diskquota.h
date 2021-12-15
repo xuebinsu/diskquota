@@ -118,6 +118,7 @@ struct DiskQuotaWorkerEntry
 	Oid			dbid;
 	pid_t		pid;			/* worker pid */
 	enum WorkerStatus status;
+	unsigned int timestamp;
 	BackgroundWorkerHandle *handle;
 };
 
@@ -155,5 +156,6 @@ extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid
 
 extern bool worker_set_status(Oid database_oid, enum WorkerStatus status);
 extern enum WorkerStatus worker_get_status(Oid database_oid);
+extern unsigned int worker_get_timestamp(Oid database_oid);
 
 #endif /* DISK_QUOTA_H */
