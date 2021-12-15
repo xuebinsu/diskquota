@@ -478,6 +478,18 @@ disk_quota_shmem_startup(void)
 	if (!found)
 		memset((void *) diskquota_hardlimit, 0, sizeof(bool));
 
+	/* use disk_quota_worker_map to manage diskquota worker processes. */
+	memset(&hash_ctl, 0, sizeof(hash_ctl));
+	hash_ctl.keysize = sizeof(Oid);
+	hash_ctl.entrysize = sizeof(DiskQuotaWorkerEntry);
+	hash_ctl.hash = oid_hash;
+
+	disk_quota_worker_map = ShmemInitHash("disk quota worker map",
+										MAX_NUM_MONITORED_DB,
+										MAX_NUM_MONITORED_DB,
+										&hash_ctl,
+										HASH_ELEM | HASH_FUNCTION);
+
 	LWLockRelease(AddinShmemInitLock);
 }
 
@@ -502,6 +514,7 @@ init_lwlocks(void)
 	diskquota_locks.paused_lock = LWLockAssign();
 	diskquota_locks.relation_cache_lock = LWLockAssign();
 	diskquota_locks.hardlimit_lock = LWLockAssign();
+	diskquota_locks.worker_map_lock = LWLockAssign();
 }
 
 /*

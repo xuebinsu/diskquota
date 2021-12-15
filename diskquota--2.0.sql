@@ -198,3 +198,7 @@ WITH relation_cache AS (
 )
 SELECT (a).* FROM relation_cache;
 $$ LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION diskquota.show_worker_status() RETURNS text STRICT
+AS 'MODULE_PATHNAME', 'show_worker_status'
+LANGUAGE C;

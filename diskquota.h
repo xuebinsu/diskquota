@@ -2,6 +2,7 @@
 #define DISK_QUOTA_H
 
 #include "storage/lwlock.h"
+#include "postmaster/bgworker.h"
 
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 10
@@ -38,6 +39,7 @@ struct DiskQuotaLocks
 	LWLock	   *paused_lock;
 	LWLock	   *relation_cache_lock;
 	LWLock	   *hardlimit_lock;
+	LWLock	   *worker_map_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 #define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
@@ -96,6 +98,31 @@ extern ExtensionDDLMessage *extension_ddl_message;
 extern bool *diskquota_paused;
 extern bool *diskquota_hardlimit;
 
+typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
+
+enum WorkerStatus
+{
+	WORKER_NOT_FOUND = 0,
+	WORKER_STARTED,
+	WORKER_IN_PROGRESS,
+	WORKER_COMPLETED,
+
+	NUM_WORKER_STATUS
+};
+
+extern char *worker_status_text[NUM_WORKER_STATUS];
+
+/* disk quota worker info used by launcher to manage the worker processes. */
+struct DiskQuotaWorkerEntry
+{
+	Oid			dbid;
+	pid_t		pid;			/* worker pid */
+	enum WorkerStatus status;
+	BackgroundWorkerHandle *handle;
+};
+
+extern HTAB *disk_quota_worker_map;
+
 /* drop extension hook */
 extern void register_diskquota_object_access_hook(void);
 
@@ -125,4 +152,8 @@ extern int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char r
 extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
 extern List* diskquota_get_index_list(Oid relid);
 extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
-#endif
+
+extern bool worker_set_status(Oid database_oid, enum WorkerStatus status);
+extern enum WorkerStatus worker_get_status(Oid database_oid);
+
+#endif /* DISK_QUOTA_H */

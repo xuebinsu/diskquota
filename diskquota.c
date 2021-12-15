@@ -35,7 +35,6 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "pgstat.h"
-#include "postmaster/bgworker.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "tcop/idle_resource_cleaner.h"
@@ -66,22 +65,19 @@ static volatile sig_atomic_t got_sigusr1 = false;
 int			diskquota_naptime = 0;
 int			diskquota_max_active_tables = 0;
 
-typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
-
-/* disk quota worker info used by launcher to manage the worker processes. */
-struct DiskQuotaWorkerEntry
-{
-	Oid			dbid;
-	pid_t		pid;			/* worker pid */
-	BackgroundWorkerHandle *handle;
-};
-
 DiskQuotaLocks diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
 
 /* using hash table to support incremental update the table size entry.*/
-static HTAB *disk_quota_worker_map = NULL;
+HTAB *disk_quota_worker_map = NULL;
 static int	num_db = 0;
+
+char* worker_status_text[NUM_WORKER_STATUS] = {
+	[WORKER_NOT_FOUND] = "WORKER_NOT_FOUND",
+	[WORKER_STARTED] = "WORKER_STARTED",
+	[WORKER_IN_PROGRESS] = "WORKER_IN_PROGRESS",
+	[WORKER_COMPLETED] = "WORKER_COMPLETED"
+};
 
 /*
  * diskquota_paused is a flag used to pause the extension (when the flag is
@@ -364,6 +360,7 @@ disk_quota_worker_main(Datum main_arg)
 					   diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 
+		worker_set_status(MyDatabaseId, WORKER_IN_PROGRESS);
 
 		/* Emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -378,6 +375,7 @@ disk_quota_worker_main(Datum main_arg)
 
 		/* Do the work */
 		refresh_disk_quota_model(false);
+		worker_set_status(MyDatabaseId, WORKER_COMPLETED);
 	}
 
 	/* clear the out-of-quota blacklist in shared memory */
@@ -403,7 +401,6 @@ static inline bool isAbnormalLoopTime(int diff_sec)
 void
 disk_quota_launcher_main(Datum main_arg)
 {
-	HASHCTL		hash_ctl;
 	time_t loop_begin, loop_end;
 
 	/* establish signal handlers before unblocking signals. */
@@ -436,17 +433,6 @@ disk_quota_launcher_main(Datum main_arg)
 	 * database.
 	 */
 	create_monitor_db_table();
-
-	/* use disk_quota_worker_map to manage diskquota worker processes. */
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize = sizeof(Oid);
-	hash_ctl.entrysize = sizeof(DiskQuotaWorkerEntry);
-	hash_ctl.hash = oid_hash;
-
-	disk_quota_worker_map = hash_create("disk quota worker map",
-										1024,
-										&hash_ctl,
-										HASH_ELEM | HASH_FUNCTION);
 
 	/*
 	 * firstly start worker processes for each databases with diskquota
@@ -901,6 +887,7 @@ try_kill_db_worker(Oid dbid)
 	DiskQuotaWorkerEntry *hash_entry;
 	bool		found;
 
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
 	hash_entry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
 													  (void *) &dbid,
 													  HASH_REMOVE, &found);
@@ -915,6 +902,7 @@ try_kill_db_worker(Oid dbid)
 			pfree(handle);
 		}
 	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
 }
 
 /*
@@ -926,6 +914,7 @@ terminate_all_workers(void)
 	DiskQuotaWorkerEntry *hash_entry;
 	HASH_SEQ_STATUS iter;
 
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
 
 	hash_seq_init(&iter, disk_quota_worker_map);
 
@@ -938,6 +927,7 @@ terminate_all_workers(void)
 		if (hash_entry->handle)
 			TerminateBackgroundWorker(hash_entry->handle);
 	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
 }
 
 /*
@@ -1000,6 +990,8 @@ start_worker_by_dboid(Oid dbid)
 
 	Assert(status == BGWH_STARTED);
 
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+
 	/* put the worker handle into the worker map */
 	workerentry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
 													   (void *) &dbid,
@@ -1008,7 +1000,12 @@ start_worker_by_dboid(Oid dbid)
 	{
 		workerentry->handle = handle;
 		workerentry->pid = pid;
+		workerentry->status = WORKER_STARTED;
 	}
+
+	elog(WARNING, "worker status enter %p %d", workerentry, workerentry->dbid);
+
+	LWLockRelease(diskquota_locks.worker_map_lock);
 
 	return true;
 }
@@ -1028,4 +1025,48 @@ is_valid_dbid(Oid dbid)
 		return false;
 	ReleaseSysCache(tuple);
 	return true;
+}
+
+bool
+worker_set_status(Oid database_oid, enum WorkerStatus status)
+{
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+
+	bool found = false;
+	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
+		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
+
+	elog(WARNING, "worker_set_status %p %d", workerentry, database_oid);
+	
+	if (found)
+	{
+		workerentry->status = status;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+	return found;
+}
+
+enum WorkerStatus
+worker_get_status(Oid database_oid)
+{
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+
+	bool found = false;
+	enum WorkerStatus status = WORKER_NOT_FOUND;
+	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
+		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
+	
+	if (found)
+	{
+		status = workerentry->status;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+	return status;
+}
+
+PG_FUNCTION_INFO_V1(show_worker_status);
+Datum
+show_worker_status(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_TEXT_P(cstring_to_text(worker_status_text[worker_get_status(MyDatabaseId)]));
 }
