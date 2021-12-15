@@ -203,16 +203,18 @@ CREATE OR REPLACE FUNCTION diskquota.show_worker_epoch() RETURNS bigint STRICT
 AS 'MODULE_PATHNAME', 'show_worker_epoch'
 LANGUAGE C;
 
-CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_advance() RETURNS boolean STRICT
+CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_new_epoch() RETURNS boolean STRICT
 AS $$
 DECLARE
-        begin_epoch bigint;
         current_epoch bigint;
+        new_epoch bigint;
 BEGIN
-        begin_epoch := (SELECT diskquota.show_worker_epoch());
+        current_epoch := (SELECT diskquota.show_worker_epoch());
         LOOP
-                current_epoch := (SELECT diskquota.show_worker_epoch());
-                IF (current_epoch - begin_epoch) > 0 THEN
+                new_epoch := (SELECT diskquota.show_worker_epoch());
+                IF (new_epoch < current_epoch) THEN
+                        current_epoch := current_epoch + (1::bigint << 32);
+                IF (new_epoch - current_epoch) > 0 THEN
                         RETURN TRUE;
                 END IF;
         END LOOP;
