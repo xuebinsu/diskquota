@@ -100,25 +100,12 @@ extern bool *diskquota_hardlimit;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
-enum WorkerStatus
-{
-	WORKER_NOT_FOUND = 0,
-	WORKER_STARTED,
-	WORKER_IN_PROGRESS,
-	WORKER_COMPLETED,
-
-	NUM_WORKER_STATUS
-};
-
-extern char *worker_status_text[NUM_WORKER_STATUS];
-
 /* disk quota worker info used by launcher to manage the worker processes. */
 struct DiskQuotaWorkerEntry
 {
 	Oid			dbid;
 	pid_t		pid;			/* worker pid */
-	enum WorkerStatus status;
-	unsigned int timestamp;
+	unsigned int epoch;
 	BackgroundWorkerHandle *handle;
 };
 
@@ -154,8 +141,7 @@ extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
 extern List* diskquota_get_index_list(Oid relid);
 extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
 
-extern bool worker_set_status(Oid database_oid, enum WorkerStatus status);
-extern enum WorkerStatus worker_get_status(Oid database_oid);
-extern unsigned int worker_get_timestamp(Oid database_oid);
+extern bool worker_increase_epoch(Oid database_oid);
+extern unsigned int worker_get_epoch(Oid database_oid);
 
 #endif /* DISK_QUOTA_H */

@@ -72,13 +72,6 @@ ExtensionDDLMessage *extension_ddl_message = NULL;
 HTAB *disk_quota_worker_map = NULL;
 static int	num_db = 0;
 
-char* worker_status_text[NUM_WORKER_STATUS] = {
-	[WORKER_NOT_FOUND] = "WORKER_NOT_FOUND",
-	[WORKER_STARTED] = "WORKER_STARTED",
-	[WORKER_IN_PROGRESS] = "WORKER_IN_PROGRESS",
-	[WORKER_COMPLETED] = "WORKER_COMPLETED"
-};
-
 /*
  * diskquota_paused is a flag used to pause the extension (when the flag is
  * enabled, the extension keeps counting the disk usage but doesn't emit an
@@ -360,8 +353,6 @@ disk_quota_worker_main(Datum main_arg)
 					   diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 
-		worker_set_status(MyDatabaseId, WORKER_IN_PROGRESS);
-
 		/* Emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
 			proc_exit(1);
@@ -375,7 +366,7 @@ disk_quota_worker_main(Datum main_arg)
 
 		/* Do the work */
 		refresh_disk_quota_model(false);
-		worker_set_status(MyDatabaseId, WORKER_COMPLETED);
+		worker_increase_epoch(MyDatabaseId);
 	}
 
 	/* clear the out-of-quota blacklist in shared memory */
@@ -1000,11 +991,8 @@ start_worker_by_dboid(Oid dbid)
 	{
 		workerentry->handle = handle;
 		workerentry->pid = pid;
-		workerentry->status = WORKER_STARTED;
-		workerentry->timestamp = 0;
+		workerentry->epoch = 0;
 	}
-
-	elog(WARNING, "worker status enter %p %d", workerentry, workerentry->dbid);
 
 	LWLockRelease(diskquota_locks.worker_map_lock);
 
@@ -1029,7 +1017,7 @@ is_valid_dbid(Oid dbid)
 }
 
 bool
-worker_set_status(Oid database_oid, enum WorkerStatus status)
+worker_increase_epoch(Oid database_oid)
 {
 	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
 
@@ -1039,63 +1027,33 @@ worker_set_status(Oid database_oid, enum WorkerStatus status)
 	
 	if (found)
 	{
-		workerentry->status = status;
-		if (status == WORKER_COMPLETED)
-		{
-			elog(WARNING, "worker_set_status timestamp %p %d", workerentry, database_oid);
-			++workerentry->timestamp;
-		}
+		++(workerentry->epoch);
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
 	return found;
 }
 
-enum WorkerStatus
-worker_get_status(Oid database_oid)
-{
-	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
-
-	bool found = false;
-	enum WorkerStatus status = WORKER_NOT_FOUND;
-	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
-		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
-	
-	if (found)
-	{
-		status = workerentry->status;
-	}
-	LWLockRelease(diskquota_locks.worker_map_lock);
-	return status;
-}
-
 unsigned int
-worker_get_timestamp(Oid database_oid)
+worker_get_epoch(Oid database_oid)
 {
 	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
 
 	bool found = false;
-	unsigned int timestamp = 0;
+	unsigned int epoch = 0;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
 		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
 	
 	if (found)
 	{
-		timestamp = workerentry->timestamp;
+		epoch = workerentry->epoch;
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
-	return timestamp;
+	return epoch;
 }
 
-PG_FUNCTION_INFO_V1(show_worker_status);
+PG_FUNCTION_INFO_V1(show_worker_epoch);
 Datum
-show_worker_status(PG_FUNCTION_ARGS)
+show_worker_epoch(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_TEXT_P(cstring_to_text(worker_status_text[worker_get_status(MyDatabaseId)]));
-}
-
-PG_FUNCTION_INFO_V1(show_worker_timestamp);
-Datum
-show_worker_timestamp(PG_FUNCTION_ARGS)
-{
-	PG_RETURN_UINT32(worker_get_timestamp(MyDatabaseId));
+	PG_RETURN_UINT32(worker_get_epoch(MyDatabaseId));
 }

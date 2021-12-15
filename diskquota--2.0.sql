@@ -199,10 +199,23 @@ WITH relation_cache AS (
 SELECT (a).* FROM relation_cache;
 $$ LANGUAGE SQL;
 
-CREATE OR REPLACE FUNCTION diskquota.show_worker_status() RETURNS text STRICT
-AS 'MODULE_PATHNAME', 'show_worker_status'
+CREATE OR REPLACE FUNCTION diskquota.show_worker_epoch() RETURNS bigint STRICT
+AS 'MODULE_PATHNAME', 'show_worker_epoch'
 LANGUAGE C;
 
-CREATE OR REPLACE FUNCTION diskquota.show_worker_timestamp() RETURNS bigint STRICT
-AS 'MODULE_PATHNAME', 'show_worker_timestamp'
-LANGUAGE C;
+CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_advance() RETURNS boolean STRICT
+AS $$
+DECLARE
+        begin_epoch bigint;
+        current_epoch bigint;
+BEGIN
+        begin_epoch := (SELECT diskquota.show_worker_epoch());
+        LOOP
+                current_epoch := (SELECT diskquota.show_worker_epoch());
+                IF (current_epoch - begin_epoch) > 0 THEN
+                        RETURN TRUE;
+                END IF;
+        END LOOP;
+        RETURN FALSE;
+END;
+$$ LANGUAGE PLpgSQL;
