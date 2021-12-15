@@ -213,7 +213,7 @@ BEGIN
         LOOP
                 new_epoch := (SELECT diskquota.show_worker_epoch());
                 IF (new_epoch < current_epoch) THEN
-                        current_epoch := current_epoch + (1::bigint << 32);
+                        new_epoch := new_epoch + (1::bigint << 32);
                 IF (new_epoch - current_epoch) > 0 THEN
                         RETURN TRUE;
                 END IF;
