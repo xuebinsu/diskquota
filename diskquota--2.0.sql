@@ -199,11 +199,22 @@ WITH relation_cache AS (
 SELECT (a).* FROM relation_cache;
 $$ LANGUAGE SQL;
 
-CREATE OR REPLACE FUNCTION diskquota.show_worker_epoch() RETURNS bigint STRICT
+
+-- Returns the worker epoch for the current database. 
+-- An epoch marks a new iteration of refreshing quota usage by a bgworker.
+-- An epoch is a 32-bit unsigned integer and there is NO invalid value.
+-- Therefore, the UDF must throw an error if something unexpected occurs.
+CREATE OR REPLACE FUNCTION diskquota.show_worker_epoch()
+RETURNS bigint STRICT
 AS 'MODULE_PATHNAME', 'show_worker_epoch'
 LANGUAGE C;
 
-CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_new_epoch() RETURNS boolean STRICT
+-- Checks if the bgworker for the current database works as expected.
+-- 1. If it returns successfully in `diskquota.naptime`, the bgworker works as expected.
+-- 2. If it does not terminate, there must be some issues with the bgworker. 
+--    In this case, we must ensure this UDF can be interrupted by the user. 
+CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_new_epoch() 
+RETURNS boolean STRICT
 AS $$
 DECLARE
         current_epoch bigint;
