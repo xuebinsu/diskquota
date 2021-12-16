@@ -991,7 +991,7 @@ start_worker_by_dboid(Oid dbid)
 	{
 		workerentry->handle = handle;
 		workerentry->pid = pid;
-		workerentry->epoch = UINT32_MAX;
+		workerentry->epoch = 0;
 	}
 
 	LWLockRelease(diskquota_locks.worker_map_lock);
@@ -1048,6 +1048,12 @@ worker_get_epoch(Oid database_oid)
 		epoch = workerentry->epoch;
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
+	if (!found)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] worker not found for database \"%s\"",
+							   get_database_name(MyDatabaseId))));	
+	}
 	return epoch;
 }
 
