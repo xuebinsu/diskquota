@@ -25,11 +25,11 @@ SET default_tablespace = ctas_schemaspc;
 CREATE TABLE t1 AS SELECT generate_series(1, 100000000);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-[hardlimit] tablespace-schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+ERROR:  tablespace:260822 schema:260823 diskquota exceeded  (seg1 127.0.0.1:6003 pid=226193)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- toast table
@@ -37,22 +37,22 @@ CREATE TABLE toast_table
   AS SELECT ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'array' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-[hardlimit] tablespace-schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+ERROR:  tablespace:260822 schema:260823 diskquota exceeded  (seg1 127.0.0.1:6003 pid=226193)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- ao table
 CREATE TABLE ao_table WITH (appendonly=true) AS SELECT generate_series(1, 100000000);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-[hardlimit] tablespace-schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+ERROR:  tablespace:260822 schema:260823 diskquota exceeded  (seg2 127.0.0.1:6004 pid=226194)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- aocs table
@@ -60,11 +60,11 @@ CREATE TABLE aocs_table WITH (appendonly=true, orientation=column)
   AS SELECT i, ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000) AS i;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-[hardlimit] tablespace-schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+ERROR:  tablespace:260822 schema:260823 diskquota exceeded  (seg1 127.0.0.1:6003 pid=226193)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- disable hardlimit and do some clean-ups

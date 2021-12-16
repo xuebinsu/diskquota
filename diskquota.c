@@ -219,7 +219,7 @@ define_guc_variables(void)
 							NULL,
 							&diskquota_naptime,
 							2,
-							1,
+							0,
 							INT_MAX,
 							PGC_SIGHUP,
 							0,
