@@ -220,11 +220,12 @@ DECLARE
         current_epoch bigint;
         new_epoch bigint;
 BEGIN
-        current_epoch := (SELECT diskquota.show_worker_epoch());
+        current_epoch := diskquota.show_worker_epoch();
         LOOP
-                new_epoch := (SELECT diskquota.show_worker_epoch());
+                new_epoch := diskquota.show_worker_epoch();
                 IF (new_epoch < current_epoch) THEN
                         new_epoch := new_epoch + (1::bigint << 32);
+               END IF;
                 IF (new_epoch - current_epoch) > 0 THEN
                         RETURN TRUE;
                 END IF;
