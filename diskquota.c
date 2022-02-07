@@ -1189,16 +1189,22 @@ Datum diskquota_status(PG_FUNCTION_ARGS)
 
 	context->index++;
 	SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-static inline void
+}
+
+static bool
 check_for_timeout(TimestampTz start_time)
 {
 	long diff_secs = 0;
 	int diff_usecs = 0;
 	TimestampDifference(start_time, GetCurrentTimestamp(), &diff_secs, &diff_usecs);
-	if (diff_secs >= 120)
+	if (diff_secs >= diskquota_worker_timeout)
+	{
 		ereport(NOTICE, (
-			errmsg("[diskquota] timeout when waiting for worker: %d", diff_secs),
+			errmsg("[diskquota] timeout when waiting for worker"),
 			errhint("please check if the bgworker is still alive.")));
+		return true;
+	}
+	return false;
 }
 
 PG_FUNCTION_INFO_V1(wait_for_worker_new_epoch);
@@ -1210,7 +1216,8 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 	for (;;)
 	{
 		CHECK_FOR_INTERRUPTS();
-		check_for_timeout(start_time);
+		if(check_for_timeout(start_time))
+			start_time = GetCurrentTimestamp();
 		int new_epoch = worker_get_epoch(MyDatabaseId);
 		if (new_epoch != current_epoch)
 		{
@@ -1218,7 +1225,8 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 			for (;;)
 			{
 				CHECK_FOR_INTERRUPTS();
-				check_for_timeout(start_time);
+				if(check_for_timeout(start_time))
+					start_time = GetCurrentTimestamp();
 				new_epoch = worker_get_epoch(MyDatabaseId);
 				if (new_epoch != current_epoch)
 					PG_RETURN_BOOL(true);
