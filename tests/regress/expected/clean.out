@@ -1,6 +1,3 @@
-DROP TABLE badquota.t1;
-DROP ROLE testbody;
-DROP SCHEMA badquota;
 SELECT diskquota.pause();
  pause 
 -------

@@ -7,6 +7,7 @@ CREATE DATABASE diskquota;
 -- end_ignore
 \! echo $?
 -- start_ignore
+\! gpstop -raf > /dev/null
 \! gpconfig -c diskquota.naptime -v 0 > /dev/null
 -- end_ignore
 \! echo $?
@@ -19,3 +20,5 @@ CREATE DATABASE diskquota;
 \! gpstop -raf > /dev/null
 -- end_ignore
 \! echo $?
+
+\! cp data/csmall.txt /tmp/csmall.txt
