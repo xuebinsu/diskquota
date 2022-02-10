@@ -30,6 +30,7 @@
 #include "tcop/idle_resource_cleaner.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -363,6 +364,8 @@ disk_quota_worker_main(Datum main_arg)
 			got_sighup = false;
 			ProcessConfigFile(PGC_SIGHUP);
 		}
+
+		SIMPLE_FAULT_INJECTOR("diskquota_worker_main");
 
 		/* Do the work */
 		if (!diskquota_is_paused())
@@ -1216,7 +1219,7 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 	for (;;)
 	{
 		CHECK_FOR_INTERRUPTS();
-		if(check_for_timeout(start_time))
+		if (check_for_timeout(start_time))
 			start_time = GetCurrentTimestamp();
 		int new_epoch = worker_get_epoch(MyDatabaseId);
 		if (new_epoch != current_epoch)
@@ -1225,7 +1228,7 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 			for (;;)
 			{
 				CHECK_FOR_INTERRUPTS();
-				if(check_for_timeout(start_time))
+				if (check_for_timeout(start_time))
 					start_time = GetCurrentTimestamp();
 				new_epoch = worker_get_epoch(MyDatabaseId);
 				if (new_epoch != current_epoch)
