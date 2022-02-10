@@ -240,6 +240,19 @@ define_guc_variables(void)
 							NULL,
 							NULL,
 							NULL);
+
+	DefineCustomIntVariable("diskquota.worker_timeout",
+							"Duration between each check (in seconds).",
+							NULL,
+							&diskquota_worker_timeout,
+							60,
+							1,
+							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
