@@ -1,3 +1,8 @@
+!\retcode gpconfig -c diskquota.worker_timeout -v 1;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
 SELECT gp_inject_fault_infinite('diskquota_worker_main', 'suspend', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
  gp_inject_fault_infinite 
 --------------------------
@@ -26,3 +31,8 @@ SELECT gp_inject_fault_infinite('diskquota_worker_main', 'resume', dbid) FROM gp
 
 1<:  <... completed>
 ERROR:  canceling statement due to user request
+
+!\retcode gpconfig -r diskquota.worker_timeout;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)

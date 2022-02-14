@@ -39,11 +39,11 @@ function test(){
 			## Bring down the QD.
 			gpstop -may -M immediate
 			export PGPORT=6001
+			export MASTER_DATA_DIRECTORY=${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
+			gpactivatestandby -ad $MASTER_DATA_DIRECTORY
 			echo "export PGPORT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
+			echo "export MASTER_DATA_DIRECTORY=\$MASTER_DATA_DIRECTORY" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 			source /usr/local/greenplum-db-devel/greenplum_path.sh
-			gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
-			echo $MASTER_DATA_DIRECTORY
-			echo $PGPORT
 			make installcheck
 		fi
 		popd

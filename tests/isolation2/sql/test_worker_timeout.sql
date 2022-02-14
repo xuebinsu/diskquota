@@ -1,3 +1,6 @@
+!\retcode gpconfig -c diskquota.worker_timeout -v 1;
+!\retcode gpstop -u;
+
 SELECT gp_inject_fault_infinite('diskquota_worker_main', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=-1;
 
@@ -12,3 +15,6 @@ SELECT gp_inject_fault_infinite('diskquota_worker_main', 'resume', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=-1;
 
 1<:
+
+!\retcode gpconfig -r diskquota.worker_timeout;
+!\retcode gpstop -u;
