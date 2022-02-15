@@ -1069,13 +1069,13 @@ worker_increase_epoch(Oid database_oid)
 	return found;
 }
 
-unsigned int
+uint32
 worker_get_epoch(Oid database_oid)
 {
 	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
 
 	bool found = false;
-	unsigned int epoch = 0;
+	uint32 epoch = 0;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
 		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
 	
@@ -1228,26 +1228,23 @@ Datum
 wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 {
 	TimestampTz start_time = GetCurrentTimestamp();
-	int current_epoch = worker_get_epoch(MyDatabaseId);
+	uint32 current_epoch = worker_get_epoch(MyDatabaseId);
 	for (;;)
 	{
 		CHECK_FOR_INTERRUPTS();
 		if (check_for_timeout(start_time))
 			start_time = GetCurrentTimestamp();
-		int new_epoch = worker_get_epoch(MyDatabaseId);
-		if (new_epoch != current_epoch)
+		uint32 new_epoch = worker_get_epoch(MyDatabaseId);
+		/* Unsigned integer underflow is OK */
+		if (new_epoch - current_epoch >= 2u)
 		{
-			current_epoch = new_epoch;
-			for (;;)
-			{
-				CHECK_FOR_INTERRUPTS();
-				if (check_for_timeout(start_time))
-					start_time = GetCurrentTimestamp();
-				new_epoch = worker_get_epoch(MyDatabaseId);
-				if (new_epoch != current_epoch)
-					PG_RETURN_BOOL(true);
-			}
+			PG_RETURN_BOOL(true);
 		}
+		/* Sleep 1ms to reduce CPU usage */
+		(void) WaitLatch(&MyProc->procLatch,
+						 WL_LATCH_SET | WL_TIMEOUT,
+						 1);
+		ResetLatch(&MyProc->procLatch);
 	}
 	PG_RETURN_BOOL(false);
 }
