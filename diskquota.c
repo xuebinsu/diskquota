@@ -1240,10 +1240,10 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 		{
 			PG_RETURN_BOOL(true);
 		}
-		/* Sleep 1ms to reduce CPU usage */
+		/* Sleep for naptime to reduce CPU usage */
 		(void) WaitLatch(&MyProc->procLatch,
 						 WL_LATCH_SET | WL_TIMEOUT,
-						 1);
+						 diskquota_naptime ? diskquota_naptime : 1);
 		ResetLatch(&MyProc->procLatch);
 	}
 	PG_RETURN_BOOL(false);
