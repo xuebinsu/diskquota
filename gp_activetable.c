@@ -400,6 +400,12 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 			case FETCH_ACTIVE_SIZE:
 				localCacheTable = get_active_tables_stats(PG_GETARG_ARRAYTYPE_P(1));
 				break;
+			case ADD_DB_TO_MONITOR:
+				update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
+				break;
+			case REMOVE_MONITORED_DB:
+				update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
+				break;
 			default:
 				ereport(ERROR, (errmsg("Unused mode number, transaction will be aborted")));
 				break;
@@ -410,7 +416,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 		 * total number of active tables to be returned, each tuple contains
 		 * one active table stat
 		 */
-		funcctx->max_calls = (uint32) hash_get_num_entries(localCacheTable);
+		funcctx->max_calls = localCacheTable ? (uint32) hash_get_num_entries(localCacheTable) : 0;
 
 		/*
 		 * prepare attribute metadata for next calls that generate the tuple

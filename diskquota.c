@@ -523,10 +523,7 @@ create_monitor_db_table(void)
 	bool		ret = true;
 
 	sql = "create schema if not exists diskquota_namespace;"
-		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);"
-		"create schema if not exists diskquota;"
-		"create or replace function diskquota.update_diskquota_db_list(oid, int4) returns void "
-		"strict as '$libdir/diskquota' language C;";
+		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);";
 
 	StartTransactionCommand();
 
@@ -891,15 +888,6 @@ del_dbid_from_database_list(Oid dbid)
 	{
 		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
 	}
-	pfree(str.data);
-
-	/* clean the dbid from shared memory*/
-	initStringInfo(&str);
-	appendStringInfo(&str, "select gp_segment_id, diskquota.update_diskquota_db_list(%u, 1)"
-			" from gp_dist_random('gp_id');", dbid);
-	ret = SPI_execute(str.data, true, 0);
-	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
 	pfree(str.data);
 }
 
