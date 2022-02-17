@@ -505,6 +505,11 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	 */
 	update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
 
+	if (!IS_QUERY_DISPATCHER())
+	{
+		return;
+	}
+
 	/*
 	 * Lock on extension_ddl_lock to avoid multiple backend create diskquota
 	 * extension at the same time.
