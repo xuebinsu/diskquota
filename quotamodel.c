@@ -621,8 +621,8 @@ do_check_diskquota_state_is_ready(void)
 	int			i;
 	StringInfoData sql_command;
 
-	/* Add the dbid to watching list, so the hook can catch the table change*/
 	initStringInfo(&sql_command);
+	/* Add current database to the monitored db cache on all segments */
 	appendStringInfo(&sql_command, 
 					"SELECT diskquota.diskquota_fetch_table_stat(%d, ARRAY[]::oid[]) "
 					"FROM gp_dist_random('gp_id');", ADD_DB_TO_MONITOR);
@@ -631,6 +631,7 @@ do_check_diskquota_state_is_ready(void)
         ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
             	errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
 	pfree(sql_command.data);
+	/* Add current database to the monitored db cache on coordinator */
 	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
 	/*
 	 * check diskquota state from table diskquota.state errors will be catch

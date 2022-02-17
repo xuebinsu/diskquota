@@ -348,11 +348,22 @@ gp_fetch_active_tables(bool is_init)
 
 /*
  * Function to get the table size from each segments
- * There are three mode:
- * 1. gather active table oid from all the segments, since table may only
- * be modified on a subset of the segments, we need to firstly gather the
- * active table oid list from all the segments.
- * 2. calculate the active table size based on the active table oid list.
+ * There are 4 modes:
+ * 
+ * - FETCH_ACTIVE_OID: gather active table oid from all the segments, since 
+ * table may only be modified on a subset of the segments, we need to firstly
+ * gather the active table oid list from all the segments.
+ * 
+ * - FETCH_ACTIVE_SIZE: calculate the active table size based on the active
+ * table oid list.
+ * 
+ * - ADD_DB_TO_MONITOR: add MyDatabaseId to the monitored db cache so that 
+ * active tables in the current database will be recorded. This is used each
+ * time a worker starts.
+ * 
+ * - REMOVE_MONITORED_DB: remove MyDatabaseId from the monitored db cache so 
+ * that active tables in the current database will be recorded. This is used
+ * when DROP EXTENSION. 
  */
 Datum
 diskquota_fetch_table_stat(PG_FUNCTION_ARGS)

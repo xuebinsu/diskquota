@@ -499,6 +499,12 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	if (oid != objectId)
 		goto out;
 
+	/* 
+	 * Remove the current database from monitored db cache 
+	 * on all segments and on coordinator.
+	 */
+	update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
+
 	/*
 	 * Lock on extension_ddl_lock to avoid multiple backend create diskquota
 	 * extension at the same time.
@@ -548,7 +554,6 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_ddl_lock);
-	update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
 out:
 	if (next_object_access_hook)
 		(*next_object_access_hook) (access, classId, objectId,
@@ -1013,8 +1018,9 @@ get_size_in_mb(char *str)
 
 /*
  * Function to update the db list on each segment
+ * Will print a WARNING to log if out of memory
  */
-bool
+void
 update_diskquota_db_list(Oid dbid, HASHACTION action)
 {
 	bool	found = false;
@@ -1027,7 +1033,7 @@ update_diskquota_db_list(Oid dbid, HASHACTION action)
 	if (action == HASH_ENTER)
 	{	
 		Oid *entry = NULL;
-		entry = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, &found);
+		entry = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER_NULL, &found);
 		elog(WARNING, "add dbid %u into SHM", dbid);
 		if (!found && entry == NULL)
 		{
@@ -1045,9 +1051,6 @@ update_diskquota_db_list(Oid dbid, HASHACTION action)
 		}
 	}
 	LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
-
-	return found;
-
 }
 
 /*
