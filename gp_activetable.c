@@ -361,9 +361,9 @@ gp_fetch_active_tables(bool is_init)
  * active tables in the current database will be recorded. This is used each
  * time a worker starts.
  * 
- * - REMOVE_MONITORED_DB: remove MyDatabaseId from the monitored db cache so 
- * that active tables in the current database will be recorded. This is used
- * when DROP EXTENSION. 
+ * - REMOVE_DB_FROM_BEING_MONITORED: remove MyDatabaseId from the monitored 
+ * db cache so that active tables in the current database will be recorded. 
+ * This is used when DROP EXTENSION. 
  */
 Datum
 diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
@@ -414,7 +414,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 			case ADD_DB_TO_MONITOR:
 				update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
 				break;
-			case REMOVE_MONITORED_DB:
+			case REMOVE_DB_FROM_BEING_MONITORED:
 				update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
 				break;
 			default:

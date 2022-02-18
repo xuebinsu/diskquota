@@ -1039,8 +1039,7 @@ update_diskquota_db_list(Oid dbid, HASHACTION action)
 	{	
 		Oid *entry = NULL;
 		entry = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER_NULL, &found);
-		elog(WARNING, "add dbid %u into SHM", dbid);
-		if (!found && entry == NULL)
+		if (entry == NULL)
 		{
 			ereport(WARNING,
 				(errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));

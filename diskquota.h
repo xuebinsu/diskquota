@@ -34,7 +34,7 @@ typedef enum
 	FETCH_ACTIVE_OID,			/* fetch active table list */
 	FETCH_ACTIVE_SIZE,			/* fetch size for active tables */
 	ADD_DB_TO_MONITOR,
-	REMOVE_MONITORED_DB,
+	REMOVE_DB_FROM_BEING_MONITORED,
 }			FetchTableStatType;
 
 typedef enum
