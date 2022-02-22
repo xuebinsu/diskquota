@@ -631,7 +631,7 @@ do_check_diskquota_state_is_ready(void)
 		pfree(sql_command.data);
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 				errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
-    }
+	}
 	pfree(sql_command.data);
 	/* Add current database to the monitored db cache on coordinator */
 	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
