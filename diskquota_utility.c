@@ -1152,7 +1152,7 @@ get_rel_oid_list(void)
 	appendStringInfo(&buf,
 			"select oid, relkind "
 			"from pg_class "
-			"where oid >= %u and (relkind='r' or relkind='m' or (relinkind = 'i'))",
+			"where oid >= %u and (relkind='r' or relkind='m' or relinkind = 'i')",
 			FirstNormalObjectId);
 
 	ret = SPI_execute(buf.data, false, 0);
@@ -1174,11 +1174,12 @@ get_rel_oid_list(void)
 			if (relkind == RELKIND_INDEX)
 			{
 				HeapTuple index_tup = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(oid));
-				if (HeapTupleIsValid(index_tup)) {
+				if (HeapTupleIsValid(index_tup))
+				{
 					Oid table_oid = DatumGetObjectId(SysCacheGetAttr(INDEXRELID, index_tup, Anum_pg_index_indrelid, &isnull));
 					HeapTuple table_tup = SearchSysCacheCopy1(RELOID, table_oid);
 					char table_kind = ((Form_pg_class) GETSTRUCT(table_tup))->relkind;
-					if (table_kind != RELKIND_RELATION || table_kind != RELKIND_MATVIEW)
+					if (table_kind != RELKIND_RELATION && table_kind != RELKIND_MATVIEW)
 						continue;
 				}
 			}
