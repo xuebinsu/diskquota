@@ -14,8 +14,10 @@ DISTRIBUTED BY (i);
 \! gpstop -far > /dev/null
 \c
 
--- Make sure that the worker has started
-SELECT diskquota.wait_for_worker_new_epoch();
+-- Make sure that the worker has started. 
+-- We cannot use wait_for_worker_new_epoch() here because the worker might not
+-- have started yet.
+SELECT pg_sleep(1);
 
 SET ROLE test;
 
